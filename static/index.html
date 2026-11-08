@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarvia SOC · Triaje</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1a2230; --deck:#222c3b; --deck2:#2a3547; --rule:#334055; --text:#e8ecf2; --dim:#93a0b4;
+  --signal:#f2b544; --signal-bg:rgba(242,181,68,.08);
+  --s-critical:#e5484d; --s-high:#f27a2a; --s-medium:#e8c14a; --s-low:#4cb782; --s-informational:#7d8796;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ink);color:var(--text);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+button{font:500 14px var(--sans);color:var(--text);background:var(--deck2);border:1px solid var(--rule);border-radius:4px;padding:7px 13px;cursor:pointer}
+button:hover{border-color:var(--dim)} button:disabled{opacity:.55;cursor:progress}
+button.primary{background:var(--text);color:var(--ink);border-color:var(--text)}
+button.ai{background:transparent;color:var(--signal);border-color:var(--signal)}
+.mono{font-family:var(--mono);font-size:.92em}
+.dim{color:var(--dim)}
+
+/* Barra superior */
+.top{display:flex;align-items:center;gap:20px;height:52px;padding:0 20px;border-bottom:1px solid var(--rule);background:var(--deck)}
+.brand{font-weight:600;font-size:16px}
+.status{display:flex;gap:18px;margin-left:auto;font-size:13px;color:var(--dim);min-width:0;white-space:nowrap}
+.status span{white-space:nowrap}
+.status .on{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.top > *{flex-shrink:0}
+.top .status{flex-shrink:1}
+.top .brand,.top .rolelbl{white-space:nowrap}
+.status b{color:var(--text);font-weight:600}
+.status .on{color:var(--signal)}
+.top .actions{display:flex;gap:8px}
+
+.app{display:grid;grid-template-columns:420px 1fr;height:calc(100% - 52px)}
+
+/* Cola */
+.queue{border-right:1px solid var(--rule);display:flex;flex-direction:column;min-height:0;background:var(--ink)}
+.qhead{padding:14px 16px 10px;border-bottom:1px solid var(--rule)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:10px}
+.seg button{white-space:nowrap;border:0;border-radius:0;background:transparent;color:var(--dim);padding:6px 12px}
+.seg button.on{background:var(--deck2);color:var(--text)}
+.search{width:100%;padding:8px 10px;background:var(--deck);border:1px solid var(--rule);border-radius:4px;color:var(--text);font:14px var(--sans)}
+.qnote{font-size:12.5px;color:var(--dim);margin-top:8px}
+.rows{overflow:auto;flex:1}
+.row{display:grid;grid-template-columns:28px 4px 1fr;gap:12px;padding:11px 16px 11px 12px;border-bottom:1px solid var(--rule);cursor:pointer}
+.row:hover{background:var(--deck)} .row.sel{background:var(--deck2)}
+.row .n{font:500 13px var(--mono);color:var(--dim);text-align:right;padding-top:2px}
+.row .bar{border-radius:2px}
+.row .t{font-size:14px;line-height:1.35}
+.row .why{font-size:12.5px;color:var(--signal);margin-top:3px}
+.row .m{font-size:12.5px;color:var(--dim);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 12px}
+.row .m > span{white-space:nowrap}
+.row .ids{font:12px "IBM Plex Mono",monospace;color:var(--dim);margin-top:3px}
+.qhits{padding:8px 16px;font-size:12.5px;color:var(--dim);border-bottom:1px solid rgba(255,255,255,.06)}
+.sevflow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin-top:12px;font-size:12.5px}
+.sevflow .lbl{align-self:center;color:var(--dim);margin-right:2px}
+.sevflow .chip{border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;line-height:1.3;max-width:210px}
+.sevflow .chip i{font-style:normal;display:block;color:var(--dim);font-size:11.5px;font-weight:400}
+.sevflow .chip small{display:block;color:var(--dim);font-size:11px}
+.sevflow .chip b{font-weight:600}
+.sevflow .chip.out{border-color:currentColor}
+.sevflow .ar{align-self:center;color:var(--dim)}
+.row .ids b{color:var(--signal);font-weight:500}
+.alerts{margin-top:8px;font:12.5px "IBM Plex Mono",monospace;color:var(--dim);line-height:1.6}
+.alerts summary{cursor:pointer;color:var(--dim)}
+.alerts span{display:inline-block;margin-right:12px}
+.alerts span.hit{color:var(--signal)}
+.bg-critical{background:var(--s-critical)} .bg-high{background:var(--s-high)} .bg-medium{background:var(--s-medium)} .bg-low{background:var(--s-low)} .bg-informational{background:var(--s-informational)}
+.fg-critical{color:var(--s-critical)} .fg-high{color:var(--s-high)} .fg-medium{color:var(--s-medium)} .fg-low{color:var(--s-low)} .fg-informational{color:var(--s-informational)}
+
+/* Caso */
+.case{overflow:auto;min-height:0}
+.empty{max-width:420px;margin:120px auto;color:var(--dim);text-align:center}
+.chead{padding:22px 28px 18px;border-bottom:1px solid var(--rule)}
+.sevline{font-size:13.5px;display:flex;gap:16px;align-items:baseline}
+.sevline .sev{font-weight:600}
+h1{font-size:24px;line-height:1.25;font-weight:600;margin:6px 0 10px;max-width:46ch}
+.pred{font-size:15.5px}
+.pred .who{color:var(--signal);font-weight:600}
+.check{font-size:13.5px;color:var(--dim);margin-top:4px}
+.check.discrepa{color:var(--s-high)}
+.trap{margin-top:12px;padding:9px 12px;border-left:3px solid var(--s-critical);background:rgba(229,72,77,.1);font-size:14px}
+
+/* Cadena del ataque: la pieza principal */
+.chain{padding:18px 28px 22px;border-bottom:1px solid var(--rule);background:var(--deck)}
+.chain h2{font-size:14px;font-weight:600;margin:0 0 14px}
+.chain h2 span{font-weight:400;color:var(--dim)}
+.track{display:flex;gap:0;overflow-x:auto;padding-bottom:6px}
+.stepc{flex:0 0 190px;position:relative;padding-top:18px;padding-right:14px}
+.stepc::before{content:"";position:absolute;top:5px;left:0;right:0;height:2px;background:var(--rule)}
+.stepc:last-child::before{right:auto;width:12px}
+.stepc .pt{position:absolute;top:0;left:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--deck)}
+.stepc.hidden .pt{background:var(--deck)!important;border:2px dashed var(--signal)}
+.stepc .when{font:500 12px var(--mono);color:var(--dim)}
+.stepc .what{font-size:13px;line-height:1.35;margin-top:3px}
+.stepc.hidden .what{color:var(--signal)}
+.stepc.rel .pt{opacity:.45}
+.stepc.rel .what{color:var(--dim)}
+.stepc.mine .what{font-weight:600}
+
+/* Dos columnas: máquina | persona */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
+.machine{padding:22px 28px 60px;min-width:0}
+.person{position:sticky;top:0;padding:22px 22px 40px;border-left:1px solid var(--rule);background:var(--deck);min-height:calc(100vh - 52px)}
+section.block{margin-bottom:26px}
+section.block>h3{font-size:15px;font-weight:600;margin:0 0 8px}
+section.block>h3 .dim{font-weight:400;font-size:13px}
+.prose{max-width:72ch}
+.prose p{margin:0 0 10px}
+ul.ev{margin:6px 0 0;padding-left:18px;max-width:72ch} ul.ev li{margin:5px 0}
+details{border-top:1px solid var(--rule);padding:12px 0}
+details>summary{cursor:pointer;font-weight:500;list-style:none}
+details>summary::before{content:"+";display:inline-block;width:16px;color:var(--dim)}
+details[open]>summary::before{content:"−"}
+.q{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:13.5px}
+.q .k{color:var(--dim)}
+.kv{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px 14px;font-size:14px;max-width:80ch}
+.kv dt{color:var(--dim)} .kv dd{margin:0;overflow-wrap:anywhere}
+.machine,.person,.prose,ul.ev li,.q span,.act .tg,.what{overflow-wrap:anywhere}
+.q{grid-template-columns:150px minmax(0,1fr)}
+.role{display:inline-flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+.role button{border:0;border-radius:0;background:transparent;color:var(--dim);padding:6px 11px}
+.role button.on{background:var(--text);color:var(--ink)}
+.rolelbl{font-size:13px;color:var(--dim)}
+.slaok{color:var(--dim)} .slawarn{color:var(--s-medium)} .slaover{color:var(--s-critical);font-weight:500} .sladone{color:var(--s-low)}
+.tag{font-size:11.5px;padding:1px 6px;border:1px solid var(--signal);color:var(--signal);border-radius:3px}
+.row.done .t{color:var(--dim)}
+.batch{margin-top:12px;padding:10px 12px;border:1px solid var(--signal);border-radius:4px;background:var(--signal-bg);font-size:13.5px;line-height:1.45}
+.batch b{color:var(--signal);font-weight:600}
+.prog{height:4px;background:rgba(255,255,255,.08);border-radius:2px;margin:8px 0 2px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--signal);transition:width .6s}
+.st{margin-top:4px;font-size:12.5px;color:var(--dim)}
+.st.go{color:var(--signal);font-weight:500}
+.st.ok{color:#7fb98a}
+.count.bump{animation:bump 1.6s}
+@keyframes bump{0%,100%{background:transparent}20%,60%{background:var(--signal);color:#1a2230}}
+.batch .x{float:right;background:none;border:0;color:var(--dim);padding:0 0 0 8px;font-size:16px;line-height:1}
+.seg .count{color:var(--dim);font-weight:400;margin-left:4px}
+.ws{font-size:12.5px;color:var(--signal)}
+.reason{margin-top:8px;font-size:14px;color:var(--signal)}
+.moved{margin-top:12px;padding:9px 12px;border-left:3px solid var(--signal);background:var(--signal-bg);font-size:14px}
+.act .pend{font-size:12.5px;color:var(--signal)}
+.act .two{display:flex;gap:6px}
+.note{font-size:12.5px;color:var(--dim);margin-top:10px}
+
+/* Columna de la persona */
+.person h3{font-size:15px;font-weight:600;margin:0 0 4px}
+.person .lead{font-size:13px;color:var(--dim);margin:0 0 14px}
+.person .grp{margin-bottom:24px}
+.decide{display:grid;gap:8px}
+.decided{font-size:14px;padding:10px;border:1px solid var(--rule);border-radius:4px}
+.act{padding:10px 0;border-bottom:1px solid var(--rule)}
+.act .a{font-size:14px;font-weight:500}
+.act .tg{font-size:13px;color:var(--dim);word-break:break-word}
+.act .do{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.act .req{font-size:12px;color:var(--dim)}
+.act .ok{font-size:13px;color:var(--s-low)}
+.msgs{display:flex;gap:6px;flex-wrap:wrap}
+.msg{margin-top:10px;padding:10px;background:var(--ink);border:1px solid var(--rule);border-radius:4px;font-size:13.5px;white-space:pre-wrap}
+
+/* Informe para dirección */
+.exec{max-width:760px;padding:34px 36px 60px}
+.exec .period{font-size:13px;color:var(--dim)}
+.exec h1{font-size:28px;max-width:30ch;margin:8px 0 12px}
+.exec .lead{font-size:17px;max-width:62ch}
+.figures{display:flex;gap:40px;margin:26px 0 30px;padding:16px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.figures div{font-size:13.5px;color:var(--dim)} .figures b{display:block;font-size:26px;color:var(--text);font-weight:600}
+.exec section{margin-bottom:24px} .exec h2{font-size:17px;font-weight:600;margin:0 0 8px}
+.exec .inc{padding:10px 0;border-bottom:1px solid var(--rule)}
+
+dialog{background:var(--deck);color:var(--text);border:1px solid var(--rule);border-radius:6px;padding:22px;width:420px}
+dialog::backdrop{background:rgba(10,14,20,.7)}
+dialog h3{margin:0 0 12px;font-size:16px}
+dialog label{font-size:13px;color:var(--dim)}
+dialog input,dialog textarea{width:100%;margin:4px 0 14px;padding:8px;background:var(--ink);border:1px solid var(--rule);border-radius:4px;color:var(--text);font:14px var(--sans)}
+.dlgbtns{display:flex;gap:8px;justify-content:flex-end}
+
+@media (max-width:1180px){.split{grid-template-columns:1fr}.person{position:static;min-height:0;border-left:0;border-top:1px solid var(--rule)}}
+@media (max-width:860px){.app{grid-template-columns:1fr}.queue{max-height:45vh}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{body{background:#fff;color:#000}.top,.queue,.noprint{display:none}.app{display:block;height:auto}.figures b,.exec h1{color:#000}}
+
+.inboxbtn{position:relative}
+.inboxbtn .badge{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:9px;background:var(--s-critical);color:#fff;font-size:12px;line-height:18px;text-align:center}
+.drawer{position:fixed;top:52px;right:0;bottom:0;width:480px;max-width:100vw;background:var(--deck);border-left:1px solid var(--rule);z-index:40;display:flex;flex-direction:column;box-shadow:-12px 0 30px rgba(0,0,0,.35)}
+.drawer[hidden]{display:none}
+.drawer .dh{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--rule)}
+.drawer .dh h3{margin:0;font-size:16px}
+.drawer .dl{overflow:auto;padding:6px 0}
+.note{padding:14px 18px;border-bottom:1px solid var(--rule);border-left:3px solid var(--rule)}
+.note.unread{background:rgba(255,255,255,.03)}
+.note .nm{display:flex;gap:10px;font-size:12.5px;color:var(--dim);margin-bottom:4px}
+.note .kind{color:var(--ink);background:var(--signal);border-radius:3px;padding:0 6px;font-weight:600}
+.note .why{color:var(--signal);font-size:13.5px;margin:4px 0 8px}
+.note .subj{font-weight:600;margin-bottom:4px}
+.note .body{white-space:pre-wrap;font-size:13.5px;color:#cfd6e2;line-height:1.5}
+.note .by{font-size:12px;color:var(--dim);margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+.toast{position:fixed;right:20px;bottom:20px;z-index:50;max-width:420px;background:var(--deck2);border:1px solid var(--signal);border-radius:6px;padding:12px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:14px;cursor:pointer}
+.toast b{color:var(--signal)}
+.bulk{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:10px 16px;padding:10px 12px;border:1px solid var(--rule);border-radius:4px;font-size:13.5px;line-height:1.45}
+.bulk b{color:var(--signal)}
+.ro{padding:10px 12px;border:1px dashed var(--rule);border-radius:4px;color:var(--dim);font-size:14px}
+</style>
+</head>
+<body>
+<div class="drawer" id="drawer" hidden><div class="dh"><h3>Bandeja del N2</h3><button id="dx" aria-label="Cerrar">Cerrar</button></div><div class="dl" id="dl"></div></div>
+<div class="top">
+  <div class="brand">Tarvia SOC</div>
+  <div class="status" id="status"></div>
+  <span class="rolelbl">Trabajas como</span><div class="role" id="role"><button data-r="N1">N1</button><button data-r="N2">N2</button></div>
+  <div class="actions">
+    <button class="inboxbtn" id="inbox" title="Avisos enviados al N2">Bandeja N2<span class="badge" id="n2b" hidden></span></button>
+    <button id="exec">Informe para dirección</button>
+    <button class="primary" id="load">Cargar alertas</button><input type="file" id="up" accept=".jsonl,.json" hidden>
+  </div>
+</div>
+<div class="app">
+  <aside class="queue">
+    <div class="qhead">
+      <div class="seg"><button data-v="escalated" class="on"><span id="l-escalated">Para revisar</span><span class="count" id="c-escalated"></span></button><button data-v="batch" id="tab-batch" hidden>Última carga<span class="count" id="c-batch"></span></button><button data-v="closed" id="tab-closed" title="Casos que la IA propone cerrar y que el N1 debe confirmar (§1, §3)">Por cerrar<span class="count" id="c-closed"></span></button></div>
+      <input class="search" id="q" placeholder="Buscar por alerta (ALR-…), usuario, equipo o IP">
+      <div id="batchnote"></div>
+      <div class="qnote" id="qnote">Se reordena sola: arriba lo pendiente y más urgente (severidad, impacto para Tarvia y fases del ataque); lo ya revisado baja al final.</div>
+    </div>
+    <div class="rows" id="list"></div>
+  </aside>
+  <main class="case" id="main"><div class="empty">Elige un caso de la cola para ver qué ha encontrado la IA y decidir qué hacer.</div></main>
+</div>
+<dialog id="dlg"></dialog>
+<script>
+const $ = s => document.querySelector(s);
+// Parte de los datos la escribe el atacante: todo se escapa antes de pintarlo.
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const SEV_ORDER = ["informational", "low", "medium", "high", "critical"];
+const SEV = {critical:"Crítica", high:"Alta", medium:"Media", low:"Baja", informational:"Informativa"};
+const VERD = {true_positive:"ataque real", benign_true_positive:"actividad autorizada", false_positive:"falsa alarma", needs_more_info:"falta información"};
+const ACT = {purge_email:"Borrar el correo de todos los buzones", block_ioc:"Bloquear", revoke_sessions:"Cerrar sus sesiones",
+  reset_password:"Forzar cambio de contraseña", isolate_host:"Aislar el equipo", disable_user:"Deshabilitar la cuenta",
+  disable_access_key:"Desactivar la clave cloud", notify:"Avisar a", remove_persistence:"Quitar la persistencia de", watch:"Vigilar 24 h",
+  rotate_secrets:"Rotar secretos", call:"Llamar a", escalate:"Escalar a", full_scan:"Escaneo completo de", kill_process:"Matar el proceso",
+  lock_customer_account:"Bloquear la cuenta del cliente", cancel_order:"Anular", enable_captcha:"Activar captcha en", block_session:"Cortar la sesión",
+  reset_customer_password:"Resetear la contraseña del cliente", escalate_ot:"Escalar a Operaciones", patch:"Parchear", verify:"Verificar con",
+  pin_registry:"Fijar el registro interno en", revoke_app_consent:"Revocar la app OAuth de", close:"Cerrar"};
+let view = "escalated", cur = null, data = null, agentOn = false, poll, repTimeline = null;
+let analyst = localStorage.getItem("analyst") || "";
+let role = localStorage.getItem("role") || "N1";
+function setRole(r) {
+  role = r; localStorage.setItem("role", r); document.querySelectorAll("#role button").forEach(b => b.classList.toggle("on", b.dataset.r === r));
+  $("#l-escalated").textContent = r === "N2" ? "Escalados al N2" : "Para revisar";
+  $("#tab-closed").hidden = r === "N2";              // el N2 no trabaja los cierres del N1
+  if (r === "N2" && view === "closed") { view = "escalated"; document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x.dataset.v === "escalated")); }
+  if (data) render(); stats().catch(() => {}); list().catch(() => {});
+}
+
+// SLA: el reloj empieza cuando la alerta entra en la cola y se para cuando una persona decide.
+function sla(i) {
+  const start = new Date(i._received_at || i.received_at).getTime(), limit = (i._sla_min || 15) * 60000;
+  if (i.decided_at) { const m = Math.max(0, Math.round((new Date(i.decided_at) - start) / 60000)); return {cls: "sladone", txt: `triado en ${m} min`}; }
+  const left = start + limit - Date.now(), fmt = ms => { const m = Math.floor(Math.abs(ms) / 60000); return m >= 120 ? `${Math.round(m / 60)} h` : m >= 1 ? `${m} min` : `${Math.floor(Math.abs(ms) / 1000)} s`; };
+  if (left < 0) return {cls: "slaover", txt: `SLA vencido hace ${fmt(left)}`};
+  return {cls: left < limit * 0.25 ? "slawarn" : "slaok", txt: `quedan ${fmt(left)} de SLA`};
+}
+function tickSla() { document.querySelectorAll("[data-sla]").forEach(el => { const s = sla(JSON.parse(el.dataset.sla)); el.className = s.cls; el.textContent = s.txt; }); }
+
+const api = async (u, o) => { const r = await fetch(u, o); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || r.statusText); return j; };
+const when = ts => new Date(ts).toLocaleString("es-ES", {timeZone:"Europe/Madrid", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
+const items = a => (a || []).map(x => `<li>${esc(x)}</li>`).join("");
+
+let lastReview = null, busyNow = false, isDemo = false, lastAlerts = 0, lastStats = {};
+async function stats() {
+  const s = await api("/api/stats");
+  agentOn = !!s.agent; isDemo = !!s.demo; lastAlerts = s.alerts;
+  const busy = s.agent_running_title ? `IA ${s.agent_running_kind === "informe" ? "redactando el informe de" : "investigando"}: ${s.agent_running_title.slice(0, 38)}${s.agent_running_title.length > 38 ? "…" : ""}` : (s.agent_running ? "IA trabajando" : "");
+  $("#status").innerHTML = `<span><b>${s.alerts.toLocaleString("es")}</b> alertas</span><span><b>${s.tickets}</b> casos</span>
+    <span><b>${s.pending_human}</b> sin decidir</span>
+    <span class="${s.agent ? "on" : ""}" title="${esc(s.agent_running_title || "")}">${s.agent ? (busy ? `${esc(busy)}${s.agent_queue ? ` (${s.agent_queue} en cola)` : ""}` : "Agente IA conectado") : "Agente IA sin conexión: solo motor de reglas"}</span>`;
+  const ce = $("#c-escalated");
+  if (lastReview !== null && s.review > lastReview) { ce.classList.remove("bump"); void ce.offsetWidth; ce.classList.add("bump"); }
+  lastReview = s.review; busyNow = !!(s.agent_running || s.agent_queue);
+  inboxTick(s).catch(() => {});
+  ce.textContent = role === "N2" ? s.n2_queue : s.review; $("#c-closed").textContent = s.proposals_pending;
+  lastStats = s;
+  const b = s.batch;
+  $("#tab-batch").hidden = !b;
+  if (b) {
+    $("#c-batch").textContent = b.cases;
+    if (localStorage.getItem("batchSeen") !== b.ts) $("#batchnote").innerHTML = `<div class="batch"><button class="x" id="bx" aria-label="Ocultar aviso">×</button>
+      <b>Carga de ${esc(b.file || "alertas")}</b>: ${b.received} alertas, ${b.new} nuevas${b.existing ? ` y ${b.existing} que ya estaban en la cola` : ""}${b.invalid ? `, ${b.invalid} no válidas` : ""}.
+      Están en <b>${b.cases} casos</b>; <b>${b.review}</b> ya en «Para revisar»${b.ai_moved ? ` (${b.ai_moved} los ha subido la IA)` : ""}.
+      ${s.agent ? `<div class="prog"><i style="width:${Math.round(100 * b.ai_done / Math.max(1, b.cases))}%"></i></div>
+      La IA ha revisado <b>${b.ai_done} de ${b.cases}</b>${b.ai_done < b.cases ? ", de uno en uno y antes que el resto: los que escale pasan solos a «Para revisar»" : ". Todos revisados"}.` : "Sin IA: decide solo el motor de reglas."}</div>`;
+    else $("#batchnote").innerHTML = s.agent ? `<div class="batch">La IA ha revisado <b>${b.ai_done} de ${b.cases}</b> casos de la carga · <b>${b.review}</b> en «Para revisar»${b.ai_moved ? ` (${b.ai_moved} subidos por la IA)` : ""}
+      <div class="prog"><i style="width:${Math.round(100 * b.ai_done / Math.max(1, b.cases))}%"></i></div></div>` : "";
+    const bx = $("#bx"); if (bx) bx.onclick = () => { localStorage.setItem("batchSeen", b.ts); stats(); };
+  }
+}
+
+function bulkClose() {
+  ask(`<h3>Revisión en lote diaria (§3)</h3><p>Confirmas el cierre de ${lastStats.info_pending} casos informativos que la IA propone cerrar. Quedan registrados a tu nombre.</p>
+    <label>Tu nombre (N1)</label><input id="an" value="${esc(analyst)}">`,
+    async () => { const r = await api("/api/close_batch", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({analyst, role})}); });
+}
+function rowState(i) {
+  if (i.agent_state === "running") return `<div class="ws">La IA lo está investigando…</div>`;
+  if ((i.review_why || []).length) return `<div class="st go">→ En «Para revisar»: ${esc(i.review_why.join(", "))}</div>`;
+  if (i.agent_state === "queued") return `<div class="st">En cola para la IA</div>`;
+  return i.decided ? `<div class="st ok">Cerrado por ${esc(i.decided_by || "")} (${esc(i.decided_role || "N1")})</div>`
+    : `<div class="st">${i.ai_done ? "La IA" : "El motor"} propone cerrar · falta que lo confirme el N1</div>`;
+}
+async function list() {
+  const q = $("#q").value.trim();
+  const j = await api(`/api/incidents?view=${view}&q=${encodeURIComponent(q)}&limit=300&role=${role}`);
+  const bulk = view === "closed" && !q && role === "N1" && lastStats.info_pending
+    ? `<div class="bulk"><div><b>${lastStats.info_pending}</b> casos informativos para la <b>revisión en lote diaria</b> (política §3). Los bajos y medios se confirman uno a uno.</div><button id="bulkok">Confirmar el lote</button></div>` : "";
+  $("#list").innerHTML = bulk + (q && j.items.length ? `<div class="qhits">${j.total} caso${j.total > 1 ? "s" : ""} con «${esc(q)}» en todas las pestañas</div>` : "") + j.items.map((i, k) => `
+    <div class="row ${cur === i.ticket_id ? "sel" : ""} ${i.decided ? "done" : ""}" data-id="${esc(i.ticket_id)}" tabindex="0">
+      <div class="n">${k + 1}</div><div class="bar bg-${i.sev_now || i.severity}"></div>
+      <div><div class="t">${esc(i.title)}</div>
+        ${view !== "closed" && (i._priority_why || []).length ? `<div class="why">${esc(i._priority_why.join(", "))}</div>` : ""}
+        <div class="ids">${(i.match && i.match.length ? i.match.map(a => `<b>${esc(a)}</b>`) : i.alert_ids.slice(0, 1).map(esc)).join(" ")}${i.n > (i.match && i.match.length ? i.match.length : 1) ? ` +${i.n - (i.match && i.match.length ? i.match.length : 1)} más` : ""}${q ? ` · ${(i.review_why || []).length ? "Para revisar" : i.decided ? "Cerrado" : "Propuesta de cierre"}` : ""}</div>
+        ${view === "closed" && !(i.review_why || []).length ? (i.decided ? `<div class="st ok">Cerrado por ${esc(i.decided_by || "")} (${esc(i.decided_role || "N1")})</div>` : `<div class="st">Pendiente de que el N1 confirme el cierre</div>`) : ""}
+        <div class="m"><span>${i._rule_severity && i._rule_severity !== (i.sev_now || i.severity) ? `<span title="Severidad con la que entra la alerta">${SEV[i._rule_severity]} → </span>` : ""}<span class="fg-${i.sev_now || i.severity}">${SEV[i.sev_now || i.severity]}</span></span><span data-sla='${esc(JSON.stringify({_received_at: i._received_at, _sla_min: i._sla_min, decided_at: i.decided_at}))}'></span><span>${i.n} alerta${i.n > 1 ? "s" : ""}</span>${i.new ? '<span class="tag">nueva</span>' : ""}${i.in_batch && view !== "batch" ? '<span class="tag">última carga</span>' : ""}${i.pending ? `<span class="tag">${i.pending} para N2</span>` : ""}</div>
+        ${view === "escalated" && (i.review_why || []).some(w => w !== "el motor lo escala") ? `<div class="why">${esc(i.review_why.filter(w => w !== "el motor lo escala").join(", "))}</div>` : ""}
+        ${view === "batch" ? rowState(i) : i.agent_state ? `<div class="ws">${i.agent_state === "running" ? "La IA lo está investigando" : "En cola para la IA"}</div>` : ""}</div>
+    </div>`).join("") || `<div class="empty">${q ? `Ningún caso contiene «${esc(q)}».` : isDemo && !lastAlerts ? "Cola vacía (modo demo).<br>Pulsa «Cargar alertas» y elige el fichero de la demo: verás cómo entran, se trían y se ordenan." : "No hay casos con ese filtro."}</div>`;
+  if ($("#bulkok")) $("#bulkok").onclick = bulkClose;
+  document.querySelectorAll(".row").forEach(r => { r.onclick = () => open_(r.dataset.id); r.onkeydown = e => { if (e.key === "Enter") open_(r.dataset.id); }; });
+  tickSla();
+}
+
+async function open_(id) {
+  const changed = cur !== id;
+  if (changed) repTimeline = null;
+  cur = id;
+  document.querySelectorAll(".row").forEach(r => r.classList.toggle("sel", r.dataset.id === id));
+  data = await api("/api/incident/" + encodeURIComponent(id));
+  render();
+  if (changed) { $("#main").scrollTop = 0; window.scrollTo(0, 0); }  // un caso nuevo se abre desde arriba
+}
+
+// Cadena del ataque: alertas del caso y, cuando el informe está listo, también los pasos que no generaron alerta.
+function chain(inc) {
+  let steps = repTimeline
+    ? repTimeline.filter(x => !/autorizada/.test(x.description)).map(x => {
+        const rel = x.description.startsWith("ALERTA RELACIONADA");
+        return {ts: x.timestamp, what: x.description.replace(/^ALERTA RELACIONADA del mes \([^)]*\) · /, "").replace(/^ALERTA · /, ""),
+                rel, mine: !rel && x.description.startsWith("ALERTA"), hidden: !x.description.startsWith("ALERTA")}; })
+    : (inc._timeline || []).map(x => ({ts: x.ts, what: x.title, hidden: false, sev: x.severity}));
+  const seen = new Set(); steps = steps.filter(s => { const k = s.what.slice(0, 60); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 14);
+  const hidden = steps.filter(s => s.hidden).length, rel = steps.filter(s => s.rel).length;
+  const extra = [rel && `${rel} de otras alertas del mes`, hidden && `${hidden} sin alerta`].filter(Boolean).join(" y ");
+  return `<div class="chain"><h2>Cadena del ataque <span>${steps.length} paso${steps.length > 1 ? "s" : ""}${extra ? `: ${extra}, encontrados por la investigación` : ""}</span></h2>
+    <div class="track">${steps.map(s => `<div class="stepc ${s.hidden ? "hidden" : ""} ${s.rel ? "rel" : ""} ${s.mine ? "mine" : ""}"><div class="pt bg-${s.sev || inc.severity}"></div>
+      <div class="when">${when(s.ts)}${s.mine ? " · este caso" : s.rel ? " · otra alerta" : s.hidden ? " · sin alerta" : ""}</div><div class="what">${esc(s.what.length > 110 ? s.what.slice(0, 108) + "…" : s.what)}</div></div>`).join("")}</div></div>`;
+}
+
+// Cómo entra la alerta y cómo sale: severidad de la regla × criticidad del activo (matriz §2), ajuste ±1 y cadena.
+function sevFlow(inc, P) {
+  const c = inc._sev_calc; if (!c || !c.rule) return "";
+  const chip = (top, val, sev, cls = "", sub = "") => `<div class="chip ${cls} ${sev ? "fg-" + sev : ""}"><small>${esc(top)}</small><b>${esc(val)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
+  const afterAdj = SEV_ORDER[Math.max(0, Math.min(4, SEV_ORDER.indexOf(c.base) + (c.adj || 0)))];
+  const ar = `<span class="ar">→</span>`;
+  const parts = [chip("Entra (regla)", SEV[c.rule], c.rule), `<span class="ar">×</span>`,
+                 chip("Criticidad del activo", c.asset, "", "", c.asset_why && c.asset_why !== "por defecto" ? c.asset_why.slice(0, 60) : ""), `<span class="ar">=</span>`,
+                 chip("Resultado matriz §2", SEV[c.base], c.base)];
+  if (c.note) parts.push(ar, chip(c.note_kind === "runbook" ? "Regla del runbook" : "Veredicto", SEV[c.final || inc.severity], c.final || inc.severity, "", c.note.replace(/\s*→\s*\w+\s*$/, "").slice(0, 70)));
+  else if (c.adj) parts.push(ar, chip(`${SEV[c.base]} ${c.adj > 0 ? "+1" : "−1"} por contexto`, SEV[afterAdj], afterAdj, "", (c.adj_why || "").slice(0, 70)));
+  if (c.chain) parts.push(ar, chip("+1 por cadena", SEV[c.final], c.final, "", `${c.chain_rules} tipos de alerta sobre las mismas entidades`));
+  parts.push(ar, chip("Sale", SEV[c.final || inc.severity], c.final || inc.severity, "out"));
+  if (P && P.severity && P.severity !== (c.final || inc.severity)) parts.push(`<span class="ar">·</span>`, chip("La IA la calcula", SEV[P.severity], P.severity, "out"));
+  return `<div class="sevflow" title="Matriz §2 de la política: severidad de la regla × criticidad del activo; ±1 según el contexto"><span class="lbl">Severidad</span>${parts.join("")}</div>`;
+}
+
+function alertIds(inc) {
+  const q = $("#q").value.trim().toLowerCase(), ids = inc.alert_ids;
+  const span = a => `<span class="${q && a.toLowerCase().includes(q) ? "hit" : ""}">${esc(a)}</span>`;
+  if (ids.length <= 4) return `<div class="alerts">${ids.map(span).join("")}</div>`;
+  const hits = q ? ids.filter(a => a.toLowerCase().includes(q)) : [];
+  return `<details class="alerts"><summary>${(hits.length ? hits : ids.slice(0, 3)).map(span).join("")} · ver las ${ids.length} alertas</summary>${ids.map(span).join("")}</details>`;
+}
+
+function render() {
+  const inc = data.incident, first = data.children[0];
+  const ag = inc._agent, P = ag && ag.prediction, V = ag && ag.verification;
+  const sev = P ? P.severity : inc.severity, verdict = P ? P.verdict : inc.verdict;
+  const escalate = P ? P.escalate : inc.escalation.escalate;
+  const acts = (P ? P.actions : inc.recommended_actions).filter(a => !["close", "escalate"].includes(a.action)).slice(0, 8);
+  const pend = inc._pending || {};
+  const done = new Set((inc.executed_actions || []).map(a => a.action + "|" + a.target));
+  const dec = (inc._human || []).filter(h => h.type === "decision" && h.ts >= inc._received_at).pop();
+  const trap = (inc._injection || []).length || (P && P.manipulation);
+
+  $("#main").innerHTML = `
+  <div class="chead">
+    <div class="sevline"><span class="sev fg-${sev}">Severidad ${SEV[sev].toLowerCase()}</span><span data-sla='${esc(JSON.stringify({_received_at: inc._received_at, _sla_min: inc._sla_min, decided_at: (inc._human || []).filter(h => h.type === "decision" && h.ts >= inc._received_at).map(h => h.ts).pop()}))}'></span><span class="dim">objetivo ${esc(inc._sla)}</span><span class="dim">${inc.alert_ids.length} alerta${inc.alert_ids.length > 1 ? "s" : ""}</span></div>
+    <h1>${esc(P && P.title ? P.title : inc.title)}</h1>
+    ${alertIds(inc)}
+    <div class="pred"><span class="who">${P ? "La IA predice" : "El motor de reglas indica"}</span> ${VERD[verdict]}, ${escalate ? "escalar al N2" : "se puede cerrar"} <span class="dim">(confianza ${Math.round((P ? P.confidence : inc.confidence) * 100)} %)</span></div>
+    ${V ? `<div class="check ${inc._compare}">${inc._compare === "coincide" ? "El motor de reglas llega a la misma conclusión."
+        : inc._compare === "parcial" ? `Mismo veredicto; el motor da severidad ${SEV[V.engine.severity].toLowerCase()}.`
+        : `El motor de reglas dice ${VERD[V.engine.verdict]} con severidad ${SEV[V.engine.severity].toLowerCase()}: revisa el caso con atención.`}</div>` : ""}
+    ${sevFlow(inc, P)}
+    ${(inc._review_why || []).length ? `<div class="reason">En «Para revisar» porque ${esc(inc._review_why.join(" y "))}.</div>`
+      : dec ? `<div class="check">Cerrado por ${esc(dec.analyst)} (${esc(dec.role || "N1")}) el ${when(dec.ts)}.</div>`
+      : `<div class="check">${P ? "La IA" : "El motor de reglas"} propone cerrarlo. Según la política (§1) lo cierra el N1: confírmalo o corrígelo.</div>`}
+    ${inc._moved ? `<div class="moved">${esc(inc._moved)}</div>` : ""}
+    ${trap ? `<div class="trap">Este caso incluye texto escrito para engañar a la IA${inc._injection && inc._injection[0] ? ` («${esc(inc._injection[0])}»)` : ""}. Se ha ignorado y cuenta como indicio de ataque.</div>` : ""}
+  </div>
+  ${inc.alert_ids.length > 1 || repTimeline ? chain(inc) : ""}
+  <div class="split">
+    <div class="machine">
+      <section class="block"><h3>Lo que ha encontrado la IA</h3><div id="agent">${agentBox(inc)}</div></section>
+      ${inc.escalation.escalate || inc.alert_ids.length > 2 ? `<section class="block"><h3>Investigación del caso</h3><div id="rep" class="dim">Cargando…</div></section>` : ""}
+      <details><summary>Comprobación del motor de reglas <span class="dim">(${VERD[inc.verdict]}, ${SEV[inc.severity].toLowerCase()})</span></summary>
+        <ul class="ev">${items(reasons())}</ul>
+        <div class="note">Severidad: ${esc(inc.severity_rationale)}</div>
+        <div style="margin:12px 0 8px"><button id="live">Repetir las comprobaciones en directo</button></div>
+        <div id="steps">${steps(first._trace)}</div>
+      </details>
+    </div>
+    <aside class="person">
+      ${role === "N2" && !inc._n2 ? `<div class="grp"><h3>Caso del N1</h3><div class="ro">No está escalado ni tiene aprobaciones pendientes, así que no requiere al N2 (política §4 y §5). Lo ves en solo lectura.</div></div>` : `
+      <div class="grp"><h3>Tu decisión</h3><p class="lead">La IA propone. Tú confirmas o corriges.</p>
+        ${dec ? `<div class="decided">${esc(dec.analyst)}: ${esc(dec.decision)}${dec.comment ? `<div class="dim">${esc(dec.comment)}</div>` : ""}</div>`
+          : `<div class="decide"><button class="primary" id="ok">${(inc._review_why || []).length ? "Confirmar la predicción" : "Confirmar el cierre"}</button><button id="no">Corregir la predicción</button></div>`}
+      </div>
+      ${acts.length ? `<div class="grp"><h3>Contención</h3><p class="lead">${role === "N1"
+          ? "Como N1 ejecutas lo básico. Lo que afecta a cuentas o equipos lo solicitas y lo aprueba un N2."
+          : "Como N2 apruebas o rechazas lo que ha solicitado el N1, y puedes ejecutar cualquier acción."}</p>
+        ${acts.map((a, k) => { const key = a.action + "|" + a.target, p = pend[key];
+          let ctl;
+          if (done.has(key)) ctl = `<span class="ok">Hecho</span>`;
+          else if (!a.requires_approval) ctl = `<span class="req">Puede hacerlo el N1</span><button data-k="${k}" data-op="run">${["notify", "watch"].includes(a.action) ? "Marcar hecho" : "Ejecutar"}</button>`;
+          else if (role === "N1") ctl = p ? `<span class="pend">Esperando al N2 (lo pidió ${esc(p.analyst)})</span>` : `<span class="req">Necesita aprobación N2</span><button data-k="${k}" data-op="ask">Solicitar</button>`;
+          else ctl = `<span class="${p ? "pend" : "req"}">${p ? `Lo pide ${esc(p.analyst)}` : "Acción de N2"}</span><span class="two">${p ? `<button data-k="${k}" data-op="reject">Rechazar</button>` : ""}<button class="primary" data-k="${k}" data-op="approve">Aprobar y ejecutar</button></span>`;
+          return `<div class="act"><div class="a">${esc(ACT[a.action] || a.action)}</div><div class="tg mono">${esc(a.target)}</div><div class="do">${ctl}</div></div>`; }).join("")}</div>` : ""}
+      ${escalate ? `<div class="grp"><h3>Avisar</h3><p class="lead">La IA redacta el mensaje. Revísalo antes de enviarlo.</p>
+        <div class="msgs">${["N2", "CISO", "DPO"].map(t => `<button class="msgbtn" data-to="${t}">Redactar para ${t}</button>`).join("")}</div><div id="msg"></div></div>` : ""}`}
+    </aside>
+  </div>`;
+
+  document.querySelectorAll(".act button").forEach(b => b.onclick = () => actionDlg(acts[+b.dataset.k], b.dataset.op));
+  tickSla();
+  document.querySelectorAll(".msgbtn").forEach(b => b.onclick = () => message(b));
+  $("#live").onclick = () => live(first);
+  bindAgent();
+  if ($("#rep")) loadReport(false);
+  if ($("#ok")) $("#ok").onclick = () => decisionDlg(true);
+  if ($("#no")) $("#no").onclick = () => decisionDlg(false);
+}
+
+function reasons() {
+  const order = ["critical", "high", "medium", "low", "informational"];
+  const kids = [...data.children].sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  return [...new Set(kids.flatMap(k => k._reasons || []))].slice(0, 7);
+}
+
+function agentBox(inc) {
+  const ag = inc._agent;
+  if (ag && ag.error) return `<p class="dim">${esc(ag.error)}</p><button class="ai" id="runagent">Volver a intentarlo</button>`;
+  if (ag && ag.prediction) {
+    const P = ag.prediction;
+    return `<div class="prose"><p>${esc(P.summary)}</p></div>
+      ${P.reasons.length ? `<ul class="ev">${items(P.reasons)}</ul>` : ""}
+      ${P.open_questions.length ? `<p style="margin:14px 0 4px">Pendiente de confirmar:</p><ul class="ev">${items(P.open_questions)}</ul>` : ""}
+      <details style="margin-top:14px"><summary>Qué ha consultado la IA <span class="dim">(${ag.trace.length} consultas en ${ag.seconds} s)</span></summary>${steps(ag.trace)}</details>
+      <div class="note">Modelo ${esc(ag.model)} del DCC de la UAB. Solo consulta y propone: no puede ejecutar acciones.</div>`;
+  }
+  if (inc._agent_state === "running") return `<p>La IA está investigando este caso. La página se actualiza sola.</p>`;
+  if (inc._agent_state === "queued") return `<p>En cola. La IA investiga los casos de uno en uno para no saturar las GPU compartidas.</p>`;
+  if (!agentOn) return `<p class="dim">Sin conexión con el LLM del DCC. Arranca con ./arrancar.sh y pega la clave del equipo (empieza por «uth-»). Mientras tanto se muestra el resultado del motor de reglas.</p>`;
+  return `<p class="dim">La IA revisará el caso con las herramientas del SOC (inventario, directorio, logs, inteligencia, cambios aprobados) y propondrá veredicto, severidad y acciones.</p>
+    <button class="ai" id="runagent">Investigar con la IA</button>`;
+}
+
+function bindAgent() {
+  clearTimeout(poll);
+  const st = data.incident._agent_state;
+  if (!data.incident._agent && (st === "running" || st === "queued")) poll = setTimeout(() => open_(cur), 5000);
+  const b = $("#runagent"); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "Investigando, puede tardar un minuto";
+    const was = (data.incident._review_why || []).length > 0;
+    const o = await api(`/api/incident/${encodeURIComponent(cur)}/agent`, {method:"POST"}).catch(e => ({error: e.message}));
+    const now = (o.review_why || []).length > 0;
+    await open_(cur);
+    if (!o.error && now !== was) { data.incident._moved = now ? "Tras investigar, este caso ha pasado a «Para revisar»." : "La IA confirma que no necesita revisión."; render(); }
+    list(); stats();
+  };
+}
+
+async function loadReport(generate) {
+  const id = cur;
+  const r = await api(`/api/incident/${encodeURIComponent(id)}/report_llm?generate=${generate}`).catch(e => ({error: e.message}));
+  if (id !== cur || !$("#rep")) return;
+  if (r.error) { $("#rep").innerHTML = esc(r.error); return; }
+  const L = r.llm, D = r.data;
+  if (!repTimeline && D.timeline && D.timeline.length) {   // pintar la cadena con los pasos ocultos
+    repTimeline = D.timeline; render(); return;
+  }
+  const row = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "";
+  if (L && !L.error) {
+    $("#rep").className = "";
+    $("#rep").innerHTML = `<div class="prose"><p>${esc(L.resumen)}</p></div>
+      <dl class="kv">${row("Cómo entró", L.origen || D.initial_access)}${row("Alcance", L.alcance)}${row("Impacto", L.impacto_negocio)}${row("Causa", L.causa_raiz || D.root_cause)}</dl>
+      ${L.a_quien_avisar.length ? `<p style="margin:14px 0 4px">A quién avisar:</p><ul class="ev">${items(L.a_quien_avisar)}</ul>` : ""}
+      ${L.mejoras_de_deteccion.length ? `<p style="margin:14px 0 4px">Qué detección mejorar:</p><ul class="ev">${items(L.mejoras_de_deteccion)}</ul>` : ""}
+      ${D.related_incidents.length ? `<p style="margin:14px 0 4px">Relacionado con:</p><ul class="ev">${items(D.related_incidents)}</ul>` : ""}
+      <div class="note">Redactado por la IA a partir de la cronología que reconstruye el código.</div>`;
+  } else {
+    $("#rep").className = "";
+    $("#rep").innerHTML = `<dl class="kv">${row("Paciente cero", D.patient_zero)}${row("Cómo entró", D.initial_access)}${row("Causa", D.root_cause)}${row("Datos", D.scope.data)}</dl>
+      ${D.notifications.length ? `<p style="margin:14px 0 4px">A quién avisar:</p><ul class="ev">${items(D.notifications)}</ul>` : ""}
+      ${L && L.error ? `<p class="dim">${esc(L.error)}</p>` : ""}
+      ${agentOn ? `<div style="margin-top:12px"><button class="ai" id="genrep">Redactar el informe con la IA</button></div>` : ""}`;
+    const b = $("#genrep");
+    if (b) b.onclick = () => { b.disabled = true; b.textContent = "Redactando"; loadReport(true); };
+  }
+}
+
+async function message(btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = "Redactando";
+  const r = await api(`/api/incident/${encodeURIComponent(cur)}/message/${btn.dataset.to}`, {method:"POST"}).catch(e => ({error: e.message}));
+  btn.disabled = false; btn.textContent = old;
+  $("#msg").innerHTML = r.error ? `<p class="dim">${esc(r.error)}</p>`
+    : `<div class="msg">${esc(r.asunto)}\n\n${esc(r.mensaje)}</div><div style="margin-top:8px"><button id="copy">Copiar</button></div>`;
+  if ($("#copy")) $("#copy").onclick = () => { navigator.clipboard.writeText(`${r.asunto}\n\n${r.mensaje}`); $("#copy").textContent = "Copiado"; };
+}
+
+async function execPage() {
+  cur = null; document.querySelectorAll(".row").forEach(r => r.classList.remove("sel"));
+  $("#main").innerHTML = `<div class="exec"><p class="dim">Preparando el informe para la dirección…</p></div>`;
+  const [s, r] = await Promise.all([api("/api/stats"), api("/api/committee", {method:"POST"}).catch(e => ({error: e.message}))]);
+  const figures = `<div class="figures"><div><b>${s.alerts.toLocaleString("es")}</b>alertas revisadas</div><div><b>${s.tickets}</b>casos tras agrupar</div><div><b>${s.escalated}</b>incidentes con acción</div></div>`;
+  if (r.error) { $("#main").innerHTML = `<div class="exec"><h1>Informe para el comité de dirección</h1>${figures}<p class="dim">${esc(r.error)}</p></div>`; return; }
+  $("#main").innerHTML = `<div class="exec">
+    <div class="period">Tarvia Group, seguridad, del 5 de octubre al 1 de noviembre de 2026</div>
+    <h1>${esc(r.titular)}</h1><p class="lead">${esc(r.situacion)}</p>${figures}
+    <section><h2>Incidentes más graves</h2>${r.incidentes_clave.map(x => `<div class="inc"><b>${esc(x.titulo)}</b><div>${esc(x.impacto)}</div><div class="dim">${esc(x.estado)}</div></div>`).join("")}</section>
+    <section><h2>Decisiones que necesitamos</h2><ul class="ev">${items(r.decisiones_que_necesitamos)}</ul></section>
+    <section><h2>Qué aporta el triaje con IA</h2><p>${esc(r.que_aporta_el_sistema)}</p></section>
+    <section><h2>Próximos pasos</h2><ul class="ev">${items(r.proximos_pasos)}</ul></section>
+    <div class="noprint" style="display:flex;gap:12px;align-items:center"><button onclick="window.print()">Imprimir o guardar en PDF</button><span class="dim" style="font-size:13px">Redactado por la IA. Revísalo antes de presentarlo.</span></div>
+  </div>`;
+}
+
+function steps(trace) {
+  return (trace || []).map(s => `<div class="q"><span class="k">${esc(s.tool)}</span><span>${esc(s.found)}</span></div>`).join("");
+}
+
+async function live(t) {
+  const b = $("#live"); b.disabled = true; b.textContent = "Comprobando";
+  const r = await api("/api/retriage/" + encodeURIComponent(t.alert_ids[0]), {method:"POST"});
+  $("#steps").innerHTML = "";
+  for (const s of r.ticket._trace) { $("#steps").insertAdjacentHTML("beforeend", steps([s])); await new Promise(x => setTimeout(x, 280)); }
+  b.disabled = false; b.textContent = `Resultado: ${VERD[r.ticket.verdict]}, ${SEV[r.ticket.severity].toLowerCase()}`;
+}
+
+function ask(html, onOk) {
+  const d = $("#dlg");
+  d.innerHTML = html + `<div class="dlgbtns"><button id="cx">Cancelar</button><button class="primary" id="go">Confirmar</button></div>`;
+  d.showModal();
+  $("#cx").onclick = () => d.close();
+  $("#go").onclick = async () => {
+    analyst = $("#an").value.trim(); localStorage.setItem("analyst", analyst);
+    if (!analyst) { $("#an").focus(); return; }
+    try { await onOk(); d.close(); if (cur) await open_(cur); await stats(); list(); } catch (e) { alert(e.message); }
+  };
+}
+
+function actionDlg(a, op) {
+  const title = {run: "Ejecutar", ask: "Solicitar al N2", approve: "Aprobar y ejecutar", reject: "Rechazar la solicitud"}[op];
+  ask(`<h3>${title}: ${esc(ACT[a.action] || a.action)}</h3><p class="mono">${esc(a.target)}</p>
+    <label>Tu nombre (${role})</label><input id="an" value="${esc(analyst)}">
+    ${op === "reject" ? '<label>Motivo</label><textarea id="cm" rows="2"></textarea>' : ""}`,
+    () => api(`/api/incident/${encodeURIComponent(cur)}/${op === "reject" ? "reject" : "action"}`, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({action:a.action, target:a.target, analyst, role, justification: a.justification, comment: $("#cm")?.value || ""})}));
+}
+
+function decisionDlg(agree) {
+  ask(`<h3>${agree ? "Confirmar la predicción" : "Corregir la predicción"}</h3>
+    <label>Tu nombre</label><input id="an" value="${esc(analyst)}">
+    ${agree ? "" : '<label>Qué es lo correcto y por qué</label><textarea id="cm" rows="3"></textarea>'}`,
+    () => api(`/api/incident/${encodeURIComponent(cur)}/decision`, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({analyst, role, decision: agree ? "predicción confirmada" : "predicción corregida", comment: $("#cm")?.value || ""})}));
+}
+
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b));
+  $("#qnote").style.display = view === "closed" ? "none" : "";
+  list();
+});
+let timer; $("#q").oninput = () => { clearTimeout(timer); timer = setTimeout(list, 250); };
+$("#exec").onclick = execPage;
+$("#load").onclick = () => $("#up").click();
+$("#up").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  e.target.value = ""; $("#load").disabled = true; $("#load").textContent = "Cargando…";
+  try {
+    const r = await api("/api/ingest", {method:"POST", body:fd});
+    localStorage.removeItem("batchSeen");
+    await stats();
+    view = "batch"; document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x.dataset.v === "batch"));
+    $("#qnote").style.display = "";
+    list();
+  }
+  catch (err) { $("#batchnote").innerHTML = `<div class="batch">No se ha podido cargar el fichero: ${esc(err.message)}</div>`; }
+  finally { $("#load").disabled = false; $("#load").textContent = "Cargar alertas"; }
+};
+
+// ---------------------------------------------------------------- bandeja del N2 (avisos que envía el panel)
+let n2Total = null, drawerOpen = false;
+const KIND = {"aprobación": "Aprobación pendiente", "escalado": "Escalado", "sla": "SLA en riesgo"};
+function beep() { try { const c = new (window.AudioContext || window.webkitAudioContext)(); const o = c.createOscillator(), g = c.createGain();
+  o.frequency.value = 880; g.gain.value = 0.06; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.18); } catch (e) {} }
+function toast(n) {
+  const t = document.createElement("div"); t.className = "toast";
+  t.innerHTML = `<b>Aviso enviado al N2</b> · ${esc(KIND[n.kind] || n.kind)}<br>${esc(n.title.slice(0, 90))}`;
+  t.onclick = () => { t.remove(); openDrawer(); };
+  document.body.appendChild(t); setTimeout(() => t.remove(), 10000);
+}
+async function inboxTick(s) {
+  const b = $("#n2b"); b.hidden = !s.n2_unread; b.textContent = s.n2_unread || "";
+  if (n2Total !== null && s.n2_total > n2Total) {
+    const j = await api("/api/n2/inbox");
+    j.items.slice(0, s.n2_total - n2Total).reverse().forEach(toast); beep();
+  }
+  n2Total = s.n2_total;
+  if (drawerOpen) renderDrawer();
+}
+async function renderDrawer() {
+  const j = await api("/api/n2/inbox");
+  $("#dl").innerHTML = j.items.map(n => `<div class="note ${n.read ? "" : "unread"}" style="border-left-color:var(--s-${n.severity})">
+    <div class="nm"><span class="kind">${esc(KIND[n.kind] || n.kind)}</span><span class="fg-${n.severity}">${SEV[n.severity]}</span><span>${when(n.ts)}</span></div>
+    <div class="why">${esc(n.why)}</div>
+    <div class="subj">${esc(n.asunto)}</div>
+    <div class="body">${esc(n.mensaje)}</div>
+    <div class="by"><span>${n.by === "ornith" ? "Redactado por la IA (ornith)" : n.by === "redactando" ? "La IA está redactando el mensaje…" : "Plantilla automática"}</span>
+      <button data-open="${esc(n.incident_id)}">Abrir el caso</button></div></div>`).join("")
+    || `<div class="empty" style="padding:24px 18px">Sin avisos. El panel avisa al N2 cuando el N1 pide aprobar una acción, confirma un escalado o un caso crítico se queda sin decidir cerca del fin de su SLA.</div>`;
+  document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { closeDrawer(); open_(b.dataset.open); });
+}
+async function openDrawer() { drawerOpen = true; $("#drawer").hidden = false; await renderDrawer(); await api("/api/n2/inbox/read", {method: "POST"}); $("#n2b").hidden = true; }
+function closeDrawer() { drawerOpen = false; $("#drawer").hidden = true; }
+$("#inbox").onclick = () => drawerOpen ? closeDrawer() : openDrawer();
+$("#dx").onclick = closeDrawer;
+setRole(role);
+document.querySelectorAll("#role button").forEach(b => b.onclick = () => setRole(b.dataset.r));
+stats(); list();
+(function loop() { setTimeout(async () => { try { await stats(); await list(); } catch (e) {} loop(); }, busyNow ? 3000 : 8000); })();
+setInterval(tickSla, 1000);
+</script>
+</body>
+</html>
