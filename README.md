@@ -27,6 +27,12 @@ En el panel: **Para revisar** (casos que la IA escalaría) y **Por cerrar** (pro
 cómo lo ha comprobado la IA, acciones propuestas (Ejecutar / Aprobar) y tu decisión. **Cargar alertas** acepta un JSONL
 nuevo (las alertas comunes de la defensa).
 
+## Vídeo
+
+[`docs/tarvia_soc_demo.mp4`](docs/tarvia_soc_demo.mp4) (2 min 37 s): recorrido en modo demo por los niveles 1 a 4 y los avisos
+al N2. En esa grabación las respuestas de la IA vienen de un simulador local del LLM (no había acceso a ornith desde la
+máquina de grabación); el resto del panel es el real.
+
 ## Agente IA (LLM del DCC de la UAB)
 
 Flujo de cada caso: **el agente investiga y predice → el motor de reglas verifica → la persona decide.**
