@@ -7,8 +7,10 @@ aprobación humana registrada.
 
 ## Arranque rápido
 
-El repositorio contiene solo el código. Necesita el material del reto (`01_contexto` … `06_herramientas`), que no se
-incluye: clónalo como carpeta `solucion` dentro de la carpeta del reto, o indica dónde está con `TARVIA_DATA`.
+El repositorio (o el zip de la entrega) contiene solo el código. Necesita el material del reto (`01_contexto` …
+`06_herramientas`), que no se incluye: pon la carpeta `solucion` dentro de la carpeta del reto (clonándola o
+descomprimiendo el zip), o indica dónde está el material con `TARVIA_DATA`. La carpeta `data/` no se entrega: el índice
+y las cachés se generan solos al arrancar (~1 min la primera vez).
 
 ```bash
 cd DTT-UAB-The-Hack-main                      # carpeta del reto
